@@ -50,4 +50,4 @@ async def delete(ctx, number: int):
     removed = lines.pop(number - 1)
     await ctx.send(f"Deleted: {removed}")
 
-bot.run(os.getenv("TOKEN"))
+bot.run(os.getenv("MTQwNzAwNTYzNjI4MTExMDY5MA.GHhQXs.Oy5MVsV3JZWrgIMy_A5R3pccIuhN-AsENx-53o"))
