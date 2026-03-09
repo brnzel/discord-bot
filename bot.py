@@ -23,6 +23,7 @@ kay_lines = []
 brnzel_lines = []
 
 panel_channel = None
+panel_message = None
 
 
 def is_bot_staff():
@@ -142,11 +143,20 @@ class PanelView(View):
 @tasks.loop(seconds=30)
 async def panel_loop():
 
+    global panel_message
+
     if panel_channel is None:
         return
 
     try:
-        await panel_channel.send(
+
+        if panel_message:
+            try:
+                await panel_message.delete()
+            except:
+                pass
+
+        panel_message = await panel_channel.send(
             "Choose a panel:",
             view=PanelView()
         )
@@ -179,12 +189,35 @@ async def panelstart(ctx):
 
 
 @bot.command()
+@is_bot_staff()
+async def panelstop(ctx):
+
+    global panel_channel
+    global panel_message
+
+    if panel_loop.is_running():
+        panel_loop.stop()
+
+    if panel_message:
+        try:
+            await panel_message.delete()
+        except:
+            pass
+
+    panel_channel = None
+    panel_message = None
+
+    await ctx.send("🛑 Panel loop stopped.")
+
+
+@bot.command()
 async def cmnds(ctx):
 
     msg = """
 **Bot Commands**
 
-!panelstart → start panel loop (allowed channels only)
+!panelstart → start panel loop
+!panelstop → stop panel loop
 
 Add items
 !addm text
@@ -287,6 +320,10 @@ async def delb(ctx, number: int):
         removed = brnzel_lines.pop(number - 1)
         await ctx.send(f"Removed from Brnzel: {removed}")
     else:
+        await ctx.send("Invalid number.")
+
+
+bot.run(os.getenv("TOKEN"))
         await ctx.send("Invalid number.")
 
 
