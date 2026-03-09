@@ -205,4 +205,30 @@ async def delb(ctx, number: int):
     await send_panel(ctx)
 
 
+# -------------------
+# Commands list
+# -------------------
+@bot.command()
+async def cmnds(ctx):
+    msg = """
+**Bot Commands**
+
+!panel → show buttons panel
+!cmnds → show this command list
+
+Add items:
+!addm text → add to Mina
+!adds text → add to Sora
+!addk text → add to Kay
+!addb text → add to Brnzel
+
+Delete items:
+!delm number → delete from Mina
+!dels number → delete from Sora
+!delk number → delete from Kay
+!delb number → delete from Brnzel
+"""
+    await ctx.send(msg)
+
+
 bot.run(os.getenv("TOKEN"))
