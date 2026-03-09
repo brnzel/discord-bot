@@ -19,13 +19,12 @@ brnzel_lines = []
 
 def is_bot_staff():
     async def predicate(ctx):
-
         role = discord.utils.get(ctx.author.roles, id=ALLOWED_ROLE)
 
         if role or ctx.author.guild_permissions.administrator:
             return True
-
         return False
+
     return commands.check(predicate)
 
 
@@ -60,7 +59,6 @@ class PanelView(View):
         )
         return False
 
-
     async def show_mina(self, interaction: discord.Interaction):
         if not await self.has_access(interaction):
             return
@@ -74,7 +72,6 @@ class PanelView(View):
             msg += f"{i}. {line}\n"
 
         await interaction.response.send_message(msg)
-
 
     async def show_sora(self, interaction: discord.Interaction):
         if not await self.has_access(interaction):
@@ -90,7 +87,6 @@ class PanelView(View):
 
         await interaction.response.send_message(msg)
 
-
     async def show_kay(self, interaction: discord.Interaction):
         if not await self.has_access(interaction):
             return
@@ -104,7 +100,6 @@ class PanelView(View):
             msg += f"{i}. {line}\n"
 
         await interaction.response.send_message(msg)
-
 
     async def show_brnzel(self, interaction: discord.Interaction):
         if not await self.has_access(interaction):
@@ -134,7 +129,6 @@ async def panel(ctx):
 @bot.command()
 @is_bot_staff()
 async def addm(ctx, *, text):
-
     for line in text.split("\n"):
         if line.strip():
             mina_lines.append(line.strip())
@@ -145,7 +139,6 @@ async def addm(ctx, *, text):
 @bot.command()
 @is_bot_staff()
 async def adds(ctx, *, text):
-
     for line in text.split("\n"):
         if line.strip():
             sora_lines.append(line.strip())
@@ -156,7 +149,6 @@ async def adds(ctx, *, text):
 @bot.command()
 @is_bot_staff()
 async def addk(ctx, *, text):
-
     for line in text.split("\n"):
         if line.strip():
             kay_lines.append(line.strip())
@@ -167,7 +159,6 @@ async def addk(ctx, *, text):
 @bot.command()
 @is_bot_staff()
 async def addb(ctx, *, text):
-
     for line in text.split("\n"):
         if line.strip():
             brnzel_lines.append(line.strip())
@@ -178,7 +169,6 @@ async def addb(ctx, *, text):
 @bot.command()
 @is_bot_staff()
 async def delm(ctx, number: int):
-
     if 1 <= number <= len(mina_lines):
         removed = mina_lines.pop(number - 1)
         await ctx.send(f"Removed from Mina: {removed}")
@@ -189,7 +179,6 @@ async def delm(ctx, number: int):
 @bot.command()
 @is_bot_staff()
 async def dels(ctx, number: int):
-
     if 1 <= number <= len(sora_lines):
         removed = sora_lines.pop(number - 1)
         await ctx.send(f"Removed from Sora: {removed}")
@@ -200,7 +189,6 @@ async def dels(ctx, number: int):
 @bot.command()
 @is_bot_staff()
 async def delk(ctx, number: int):
-
     if 1 <= number <= len(kay_lines):
         removed = kay_lines.pop(number - 1)
         await ctx.send(f"Removed from Kay: {removed}")
@@ -211,7 +199,6 @@ async def delk(ctx, number: int):
 @bot.command()
 @is_bot_staff()
 async def delb(ctx, number: int):
-
     if 1 <= number <= len(brnzel_lines):
         removed = brnzel_lines.pop(number - 1)
         await ctx.send(f"Removed from Brnzel: {removed}")
@@ -220,7 +207,6 @@ async def delb(ctx, number: int):
 
 
 bot.run(os.getenv("TOKEN"))
-        await ctx.send("Invalid number.")
 
 
 bot.run(os.getenv("TOKEN"))
