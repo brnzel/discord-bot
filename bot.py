@@ -2,12 +2,7 @@ import discord
 from discord.ext import commands
 from discord.ui import Button, View
 import os
-from flask import Flask
-import threading
 
-# -------------------
-# Settings
-# -------------------
 ALLOWED_ROLE = 1430823219736088658
 
 intents = discord.Intents.default()
@@ -21,28 +16,7 @@ sora_lines = []
 kay_lines = []
 brnzel_lines = []
 
-# -------------------
-# Keep-Alive Web Server
-# -------------------
-app = Flask("")
 
-@app.route("/")
-def home():
-    return "Bot is running!"
-
-def run():
-    app.run(host="0.0.0.0", port=8080)
-
-def keep_alive():
-    t = threading.Thread(target=run)
-    t.start()
-
-# Start the server before running the bot
-keep_alive()
-
-# -------------------
-# Permission Check
-# -------------------
 def is_bot_staff():
     async def predicate(ctx):
         role = discord.utils.get(ctx.author.roles, id=ALLOWED_ROLE)
@@ -51,9 +25,7 @@ def is_bot_staff():
         return False
     return commands.check(predicate)
 
-# -------------------
-# Panel View
-# -------------------
+
 class PanelView(View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -89,7 +61,7 @@ class PanelView(View):
         if not mina_lines:
             await interaction.response.send_message("Mina panel empty.")
             return
-        msg = "**Mina Panel:**\n" + "\n".join(f"{i+1}. {line}" for i, line in enumerate(mina_lines))
+        msg = "**Mina Panel:**\n" + "\n".join(mina_lines)
         await interaction.response.send_message(msg)
 
     async def show_sora(self, interaction: discord.Interaction):
@@ -98,7 +70,7 @@ class PanelView(View):
         if not sora_lines:
             await interaction.response.send_message("Sora panel empty.")
             return
-        msg = "**Sora Panel:**\n" + "\n".join(f"{i+1}. {line}" for i, line in enumerate(sora_lines))
+        msg = "**Sora Panel:**\n" + "\n".join(sora_lines)
         await interaction.response.send_message(msg)
 
     async def show_kay(self, interaction: discord.Interaction):
@@ -107,7 +79,7 @@ class PanelView(View):
         if not kay_lines:
             await interaction.response.send_message("Kay panel empty.")
             return
-        msg = "**Kay Panel:**\n" + "\n".join(f"{i+1}. {line}" for i, line in enumerate(kay_lines))
+        msg = "**Kay Panel:**\n" + "\n".join(kay_lines)
         await interaction.response.send_message(msg)
 
     async def show_brnzel(self, interaction: discord.Interaction):
@@ -116,37 +88,40 @@ class PanelView(View):
         if not brnzel_lines:
             await interaction.response.send_message("Brnzel panel empty.")
             return
-        msg = "**Brnzel Panel:**\n" + "\n".join(f"{i+1}. {line}" for i, line in enumerate(brnzel_lines))
+        msg = "**Brnzel Panel:**\n" + "\n".join(brnzel_lines)
         await interaction.response.send_message(msg)
 
+
 # -------------------
-# Helper: Send Full Panel Only
+# Helper: Send full panel only (no numbering)
 # -------------------
 async def send_panel(ctx):
     view = PanelView()
     msg = "**Panel:**\n"
     if mina_lines:
-        msg += "\n**Mina:**\n" + "\n".join(f"{i+1}. {line}" for i, line in enumerate(mina_lines))
+        msg += "\n**Mina:**\n" + "\n".join(mina_lines)
     if sora_lines:
-        msg += "\n**Sora:**\n" + "\n".join(f"{i+1}. {line}" for i, line in enumerate(sora_lines))
+        msg += "\n**Sora:**\n" + "\n".join(sora_lines)
     if kay_lines:
-        msg += "\n**Kay:**\n" + "\n".join(f"{i+1}. {line}" for i, line in enumerate(kay_lines))
+        msg += "\n**Kay:**\n" + "\n".join(kay_lines)
     if brnzel_lines:
-        msg += "\n**Brnzel:**\n" + "\n".join(f"{i+1}. {line}" for i, line in enumerate(brnzel_lines))
+        msg += "\n**Brnzel:**\n" + "\n".join(brnzel_lines)
     await ctx.send(msg, view=view)
 
-# -------------------
-# Events & Commands
-# -------------------
+
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user}")
+
 
 @bot.command()
 async def panel(ctx):
     await ctx.send("Choose a panel:", view=PanelView())
 
-# Add Commands
+
+# -------------------
+# Add commands
+# -------------------
 @bot.command()
 @is_bot_staff()
 async def addm(ctx, *, text):
@@ -154,6 +129,7 @@ async def addm(ctx, *, text):
         if line.strip():
             mina_lines.append(line.strip())
     await send_panel(ctx)
+
 
 @bot.command()
 @is_bot_staff()
@@ -163,6 +139,7 @@ async def adds(ctx, *, text):
             sora_lines.append(line.strip())
     await send_panel(ctx)
 
+
 @bot.command()
 @is_bot_staff()
 async def addk(ctx, *, text):
@@ -170,6 +147,7 @@ async def addk(ctx, *, text):
         if line.strip():
             kay_lines.append(line.strip())
     await send_panel(ctx)
+
 
 @bot.command()
 @is_bot_staff()
@@ -179,13 +157,17 @@ async def addb(ctx, *, text):
             brnzel_lines.append(line.strip())
     await send_panel(ctx)
 
-# Delete Commands
+
+# -------------------
+# Delete commands
+# -------------------
 @bot.command()
 @is_bot_staff()
 async def delm(ctx, number: int):
     if 1 <= number <= len(mina_lines):
         mina_lines.pop(number - 1)
     await send_panel(ctx)
+
 
 @bot.command()
 @is_bot_staff()
@@ -194,12 +176,14 @@ async def dels(ctx, number: int):
         sora_lines.pop(number - 1)
     await send_panel(ctx)
 
+
 @bot.command()
 @is_bot_staff()
 async def delk(ctx, number: int):
     if 1 <= number <= len(kay_lines):
         kay_lines.pop(number - 1)
     await send_panel(ctx)
+
 
 @bot.command()
 @is_bot_staff()
@@ -208,7 +192,10 @@ async def delb(ctx, number: int):
         brnzel_lines.pop(number - 1)
     await send_panel(ctx)
 
-# Commands List
+
+# -------------------
+# Commands list
+# -------------------
 @bot.command()
 async def cmnds(ctx):
     msg = """
@@ -231,7 +218,5 @@ Delete items:
 """
     await ctx.send(msg)
 
-# -------------------
-# Run Bot
-# -------------------
+
 bot.run(os.getenv("TOKEN"))
