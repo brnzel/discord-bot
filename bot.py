@@ -5,15 +5,13 @@ import os
 import sqlite3
 from flask import Flask
 from threading import Thread
+import asyncio
 
 # ---------------- CONFIG ----------------
 ALLOWED_ROLE = 1430823219736088658
-ALLOWED_CHANNELS = [
-    1479831346456170618,
-    1478383164958314516,
-    1468947884807426152
-]
+ALLOWED_CHANNELS = [1479831346456170618, 1478383164958314516, 1468947884807426152]
 PANEL_INTERVAL = 30
+ITEM_MESSAGE_LIFETIME = 60  # seconds before panel item message auto-deletes
 DATABASE = "panels.db"
 
 intents = discord.Intents.default()
@@ -23,7 +21,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 panel_channel = None
 panel_message = None
-last_items_message = {}
+last_items_message = {}  # channel_id: message
 
 # ---------------- DATABASE ----------------
 def init_db():
@@ -35,29 +33,39 @@ def init_db():
         conn.commit()
 
 def get_panel(key):
-    with sqlite3.connect(DATABASE, check_same_thread=False) as conn:
-        c = conn.cursor()
-        c.execute("SELECT content FROM panels WHERE key=?", (key,))
-        result = c.fetchone()
-    return result[0].split("\n") if result and result[0] else []
+    try:
+        with sqlite3.connect(DATABASE, check_same_thread=False) as conn:
+            c = conn.cursor()
+            c.execute("SELECT content FROM panels WHERE key=?", (key,))
+            result = c.fetchone()
+        return result[0].split("\n") if result and result[0] else []
+    except Exception as e:
+        print(f"DB error get_panel {key}: {e}")
+        return []
 
 def add_panel_line(key, line):
-    lines = get_panel(key)
-    lines.append(line)
-    with sqlite3.connect(DATABASE, check_same_thread=False) as conn:
-        c = conn.cursor()
-        c.execute("UPDATE panels SET content=? WHERE key=?", ("\n".join(lines), key))
-        conn.commit()
-
-def del_panel_line(key, index):
-    lines = get_panel(key)
-    if 0 <= index < len(lines):
-        removed = lines.pop(index)
+    try:
+        lines = get_panel(key)
+        lines.append(line)
         with sqlite3.connect(DATABASE, check_same_thread=False) as conn:
             c = conn.cursor()
             c.execute("UPDATE panels SET content=? WHERE key=?", ("\n".join(lines), key))
             conn.commit()
-        return removed
+    except Exception as e:
+        print(f"DB error add_panel_line {key}: {e}")
+
+def del_panel_line(key, index):
+    try:
+        lines = get_panel(key)
+        if 0 <= index < len(lines):
+            removed = lines.pop(index)
+            with sqlite3.connect(DATABASE, check_same_thread=False) as conn:
+                c = conn.cursor()
+                c.execute("UPDATE panels SET content=? WHERE key=?", ("\n".join(lines), key))
+                conn.commit()
+            return removed
+    except Exception as e:
+        print(f"DB error del_panel_line {key}: {e}")
     return None
 
 # ---------------- UTIL ------------------
@@ -84,14 +92,22 @@ class PanelView(View):
         return False
 
     async def show_panel(self, interaction, key, title):
-        lines = get_panel(key)
-        if not lines:
-            await interaction.response.send_message(f"{title} is empty.", ephemeral=False)
-        else:
-            content = f"**{title}:**\n" + "\n".join(f"{i+1}. {l}" for i,l in enumerate(lines))
-            await interaction.response.send_message(content, ephemeral=False)
-        # store last panel items message
-        last_items_message[interaction.channel.id] = await interaction.original_response()
+        try:
+            lines = get_panel(key)
+            if not lines:
+                await interaction.response.send_message(f"{title} is empty.", ephemeral=False)
+            else:
+                content = f"**{title}:**\n" + "\n".join(f"{i+1}. {l}" for i,l in enumerate(lines))
+                msg = await interaction.response.send_message(content, ephemeral=False)
+                last_items_message[interaction.channel.id] = await interaction.original_response()
+                # auto-delete after 60s
+                await asyncio.sleep(ITEM_MESSAGE_LIFETIME)
+                try:
+                    await last_items_message[interaction.channel.id].delete()
+                    last_items_message[interaction.channel.id] = None
+                except: pass
+        except Exception as e:
+            print(f"Error showing panel {key}: {e}")
 
     @discord.ui.button(label="Mina", style=discord.ButtonStyle.primary)
     async def show_mina(self, button, interaction):
