@@ -1,246 +1,209 @@
 import discord
-from discord.ext import commands, tasks
+from discord.ext import commands
 from discord.ui import Button, View
 import os
-import sqlite3
-from flask import Flask
-from threading import Thread
-import asyncio
 
-# ---------------- CONFIG ----------------
 ALLOWED_ROLE = 1430823219736088658
-ALLOWED_CHANNELS = [1479831346456170618, 1478383164958314516, 1468947884807426152]
-PANEL_INTERVAL = 30
-ITEM_MESSAGE_LIFETIME = 60  # seconds before panel item message auto-deletes
-DATABASE = "panels.db"
 
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
+
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-panel_channel = None
-panel_message = None
-last_items_message = {}  # channel_id: message
+mina_lines = []
+sora_lines = []
+kay_lines = []
+brnzel_lines = []
 
-# ---------------- DATABASE ----------------
-def init_db():
-    with sqlite3.connect(DATABASE, check_same_thread=False) as conn:
-        c = conn.cursor()
-        c.execute("""CREATE TABLE IF NOT EXISTS panels (key TEXT PRIMARY KEY, content TEXT)""")
-        for key in ["mina","sora","kay","brnzel"]:
-            c.execute("INSERT OR IGNORE INTO panels (key, content) VALUES (?,?)",(key,""))
-        conn.commit()
 
-def get_panel(key):
-    try:
-        with sqlite3.connect(DATABASE, check_same_thread=False) as conn:
-            c = conn.cursor()
-            c.execute("SELECT content FROM panels WHERE key=?", (key,))
-            result = c.fetchone()
-        return result[0].split("\n") if result and result[0] else []
-    except Exception as e:
-        print(f"DB error get_panel {key}: {e}")
-        return []
-
-def add_panel_line(key, line):
-    try:
-        lines = get_panel(key)
-        lines.append(line)
-        with sqlite3.connect(DATABASE, check_same_thread=False) as conn:
-            c = conn.cursor()
-            c.execute("UPDATE panels SET content=? WHERE key=?", ("\n".join(lines), key))
-            conn.commit()
-    except Exception as e:
-        print(f"DB error add_panel_line {key}: {e}")
-
-def del_panel_line(key, index):
-    try:
-        lines = get_panel(key)
-        if 0 <= index < len(lines):
-            removed = lines.pop(index)
-            with sqlite3.connect(DATABASE, check_same_thread=False) as conn:
-                c = conn.cursor()
-                c.execute("UPDATE panels SET content=? WHERE key=?", ("\n".join(lines), key))
-                conn.commit()
-            return removed
-    except Exception as e:
-        print(f"DB error del_panel_line {key}: {e}")
-    return None
-
-# ---------------- UTIL ------------------
 def is_bot_staff():
     async def predicate(ctx):
         role = discord.utils.get(ctx.author.roles, id=ALLOWED_ROLE)
-        return bool(role or ctx.author.guild_permissions.administrator)
+
+        if role or ctx.author.guild_permissions.administrator:
+            return True
+        return False
+
     return commands.check(predicate)
 
-# ---------------- PANEL VIEW ------------------
+
 class PanelView(View):
     def __init__(self):
         super().__init__(timeout=None)
-        self.add_item(Button(label="Mina", style=discord.ButtonStyle.primary))
-        self.add_item(Button(label="Sora", style=discord.ButtonStyle.success))
-        self.add_item(Button(label="Kay", style=discord.ButtonStyle.secondary))
-        self.add_item(Button(label="Brnzel", style=discord.ButtonStyle.danger))
 
-    async def interaction_check(self, interaction):
+        mina_button = Button(label="Mina", style=discord.ButtonStyle.primary)
+        sora_button = Button(label="Sora", style=discord.ButtonStyle.success)
+        kay_button = Button(label="Kay", style=discord.ButtonStyle.secondary)
+        brnzel_button = Button(label="Brnzel", style=discord.ButtonStyle.danger)
+
+        mina_button.callback = self.show_mina
+        sora_button.callback = self.show_sora
+        kay_button.callback = self.show_kay
+        brnzel_button.callback = self.show_brnzel
+
+        self.add_item(mina_button)
+        self.add_item(sora_button)
+        self.add_item(kay_button)
+        self.add_item(brnzel_button)
+
+    async def has_access(self, interaction):
         role = discord.utils.get(interaction.user.roles, id=ALLOWED_ROLE)
+
         if role or interaction.user.guild_permissions.administrator:
             return True
-        await interaction.response.send_message("❌ You cannot use this panel.", ephemeral=True)
+
+        await interaction.response.send_message(
+            "❌ You don't have permission to use this panel.",
+            ephemeral=True
+        )
         return False
 
-    async def show_panel(self, interaction, key, title):
-        try:
-            lines = get_panel(key)
-            if not lines:
-                await interaction.response.send_message(f"{title} is empty.", ephemeral=False)
-            else:
-                content = f"**{title}:**\n" + "\n".join(f"{i+1}. {l}" for i,l in enumerate(lines))
-                msg = await interaction.response.send_message(content, ephemeral=False)
-                last_items_message[interaction.channel.id] = await interaction.original_response()
-                # auto-delete after 60s
-                await asyncio.sleep(ITEM_MESSAGE_LIFETIME)
-                try:
-                    await last_items_message[interaction.channel.id].delete()
-                    last_items_message[interaction.channel.id] = None
-                except: pass
-        except Exception as e:
-            print(f"Error showing panel {key}: {e}")
+    async def show_mina(self, interaction: discord.Interaction):
+        if not await self.has_access(interaction):
+            return
 
-    @discord.ui.button(label="Mina", style=discord.ButtonStyle.primary)
-    async def show_mina(self, button, interaction):
-        await self.show_panel(interaction, "mina", "Mina Panel")
-    @discord.ui.button(label="Sora", style=discord.ButtonStyle.success)
-    async def show_sora(self, button, interaction):
-        await self.show_panel(interaction, "sora", "Sora Panel")
-    @discord.ui.button(label="Kay", style=discord.ButtonStyle.secondary)
-    async def show_kay(self, button, interaction):
-        await self.show_panel(interaction, "kay", "Kay Panel")
-    @discord.ui.button(label="Brnzel", style=discord.ButtonStyle.danger)
-    async def show_brnzel(self, button, interaction):
-        await self.show_panel(interaction, "brnzel", "Brnzel Panel")
+        if not mina_lines:
+            await interaction.response.send_message("Mina panel empty.")
+            return
 
-# ------------- PANEL LOOP ----------------
-@tasks.loop(seconds=PANEL_INTERVAL)
-async def panel_loop():
-    global panel_message
-    if panel_channel is None:
-        return
-    try:
-        if panel_message:
-            await panel_message.edit(content="Choose a panel:", view=PanelView())
-        else:
-            panel_message = await panel_channel.send("Choose a panel:", view=PanelView())
-    except Exception as e:
-        print("Panel loop error:", e)
+        msg = "**Mina Panel:**\n"
+        for i, line in enumerate(mina_lines, start=1):
+            msg += f"{i}. {line}\n"
 
-# --------------- KEEP ALIVE ----------------
-app = Flask("")
+        await interaction.response.send_message(msg)
 
-@app.route("/")
-def home(): return "Bot is alive"
+    async def show_sora(self, interaction: discord.Interaction):
+        if not await self.has_access(interaction):
+            return
 
-def run_flask():
-    app.run(host="0.0.0.0", port=8080)
+        if not sora_lines:
+            await interaction.response.send_message("Sora panel empty.")
+            return
 
-def keep_alive():
-    Thread(target=run_flask).start()
+        msg = "**Sora Panel:**\n"
+        for i, line in enumerate(sora_lines, start=1):
+            msg += f"{i}. {line}\n"
 
-# --------------- EVENTS ----------------
+        await interaction.response.send_message(msg)
+
+    async def show_kay(self, interaction: discord.Interaction):
+        if not await self.has_access(interaction):
+            return
+
+        if not kay_lines:
+            await interaction.response.send_message("Kay panel empty.")
+            return
+
+        msg = "**Kay Panel:**\n"
+        for i, line in enumerate(kay_lines, start=1):
+            msg += f"{i}. {line}\n"
+
+        await interaction.response.send_message(msg)
+
+    async def show_brnzel(self, interaction: discord.Interaction):
+        if not await self.has_access(interaction):
+            return
+
+        if not brnzel_lines:
+            await interaction.response.send_message("Brnzel panel empty.")
+            return
+
+        msg = "**Brnzel Panel:**\n"
+        for i, line in enumerate(brnzel_lines, start=1):
+            msg += f"{i}. {line}\n"
+
+        await interaction.response.send_message(msg)
+
+
 @bot.event
 async def on_ready():
-    init_db()
     print(f"Logged in as {bot.user}")
 
-# --------------- COMMANDS ----------------
-@bot.command()
-@is_bot_staff()
-async def panelstart(ctx):
-    global panel_channel
-    if ctx.channel.id not in ALLOWED_CHANNELS:
-        return await ctx.send("❌ This channel cannot run panel iteration.")
-    panel_channel = ctx.channel
-    if not panel_loop.is_running(): panel_loop.start()
-    await ctx.send("✅ Panel iteration started.")
 
 @bot.command()
-@is_bot_staff()
-async def panelstop(ctx):
-    global panel_channel, panel_message
-    if panel_loop.is_running(): panel_loop.stop()
-    if panel_message:
-        try: await panel_message.delete()
-        except: pass
-    panel_channel = None
-    panel_message = None
-    await ctx.send("🛑 Panel loop stopped.")
+async def panel(ctx):
+    await ctx.send("Choose a panel:", view=PanelView())
 
-# ------- ADD / DELETE PANEL ITEMS -------
+
 @bot.command()
 @is_bot_staff()
 async def addm(ctx, *, text):
-    for l in text.split("\n"): 
-        if l.strip(): add_panel_line("mina", l.strip())
+    for line in text.split("\n"):
+        if line.strip():
+            mina_lines.append(line.strip())
+
     await ctx.send("Added to Mina panel.")
+
+
 @bot.command()
 @is_bot_staff()
 async def adds(ctx, *, text):
-    for l in text.split("\n"): 
-        if l.strip(): add_panel_line("sora", l.strip())
+    for line in text.split("\n"):
+        if line.strip():
+            sora_lines.append(line.strip())
+
     await ctx.send("Added to Sora panel.")
+
+
 @bot.command()
 @is_bot_staff()
 async def addk(ctx, *, text):
-    for l in text.split("\n"): 
-        if l.strip(): add_panel_line("kay", l.strip())
+    for line in text.split("\n"):
+        if line.strip():
+            kay_lines.append(line.strip())
+
     await ctx.send("Added to Kay panel.")
+
+
 @bot.command()
 @is_bot_staff()
 async def addb(ctx, *, text):
-    for l in text.split("\n"): 
-        if l.strip(): add_panel_line("brnzel", l.strip())
+    for line in text.split("\n"):
+        if line.strip():
+            brnzel_lines.append(line.strip())
+
     await ctx.send("Added to Brnzel panel.")
 
-@bot.command()
-@is_bot_staff()
-async def delm(ctx, number:int):
-    r = del_panel_line("mina", number-1)
-    await ctx.send(f"Removed from Mina: {r}" if r else "Invalid number.")
-@bot.command()
-@is_bot_staff()
-async def dels(ctx, number:int):
-    r = del_panel_line("sora", number-1)
-    await ctx.send(f"Removed from Sora: {r}" if r else "Invalid number.")
-@bot.command()
-@is_bot_staff()
-async def delk(ctx, number:int):
-    r = del_panel_line("kay", number-1)
-    await ctx.send(f"Removed from Kay: {r}" if r else "Invalid number.")
-@bot.command()
-@is_bot_staff()
-async def delb(ctx, number:int):
-    r = del_panel_line("brnzel", number-1)
-    await ctx.send(f"Removed from Brnzel: {r}" if r else "Invalid number.")
 
-# -------- DELETE LAST ITEMS MESSAGE ONLY --------
 @bot.command()
 @is_bot_staff()
-async def pdel(ctx):
-    if ctx.channel.id not in ALLOWED_CHANNELS:
-        return await ctx.send("❌ Cannot delete panel items here.")
-    msg = last_items_message.get(ctx.channel.id)
-    if msg:
-        try:
-            await msg.delete()
-            last_items_message[ctx.channel.id] = None
-            await ctx.send("✅ Deleted last items message.")
-        except:
-            await ctx.send("❌ Failed to delete.")
+async def delm(ctx, number: int):
+    if 1 <= number <= len(mina_lines):
+        removed = mina_lines.pop(number - 1)
+        await ctx.send(f"Removed from Mina: {removed}")
     else:
-        await ctx.send("❌ No items message to delete.")
+        await ctx.send("Invalid number.")
 
-# ---------------- RUN BOT ----------------
-keep_alive()
+
+@bot.command()
+@is_bot_staff()
+async def dels(ctx, number: int):
+    if 1 <= number <= len(sora_lines):
+        removed = sora_lines.pop(number - 1)
+        await ctx.send(f"Removed from Sora: {removed}")
+    else:
+        await ctx.send("Invalid number.")
+
+
+@bot.command()
+@is_bot_staff()
+async def delk(ctx, number: int):
+    if 1 <= number <= len(kay_lines):
+        removed = kay_lines.pop(number - 1)
+        await ctx.send(f"Removed from Kay: {removed}")
+    else:
+        await ctx.send("Invalid number.")
+
+
+@bot.command()
+@is_bot_staff()
+async def delb(ctx, number: int):
+    if 1 <= number <= len(brnzel_lines):
+        removed = brnzel_lines.pop(number - 1)
+        await ctx.send(f"Removed from Brnzel: {removed}")
+    else:
+        await ctx.send("Invalid number.")
+
+
 bot.run(os.getenv("TOKEN"))
