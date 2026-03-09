@@ -186,7 +186,3 @@ async def delb(ctx, number: int):
 
 
 bot.run(os.getenv("TOKEN"))
-
-    await ctx.send(f"Added {count} lines to Sora.")
-
-bot.run(os.getenv("TOKEN"))
