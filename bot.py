@@ -2,7 +2,12 @@ import discord
 from discord.ext import commands
 from discord.ui import Button, View
 import os
+from flask import Flask
+import threading
 
+# -------------------
+# Settings
+# -------------------
 ALLOWED_ROLE = 1430823219736088658
 
 intents = discord.Intents.default()
@@ -16,7 +21,28 @@ sora_lines = []
 kay_lines = []
 brnzel_lines = []
 
+# -------------------
+# Keep-Alive Web Server
+# -------------------
+app = Flask("")
 
+@app.route("/")
+def home():
+    return "Bot is running!"
+
+def run():
+    app.run(host="0.0.0.0", port=8080)
+
+def keep_alive():
+    t = threading.Thread(target=run)
+    t.start()
+
+# Start the server before running the bot
+keep_alive()
+
+# -------------------
+# Permission Check
+# -------------------
 def is_bot_staff():
     async def predicate(ctx):
         role = discord.utils.get(ctx.author.roles, id=ALLOWED_ROLE)
@@ -25,7 +51,9 @@ def is_bot_staff():
         return False
     return commands.check(predicate)
 
-
+# -------------------
+# Panel View
+# -------------------
 class PanelView(View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -91,13 +119,12 @@ class PanelView(View):
         msg = "**Brnzel Panel:**\n" + "\n".join(f"{i+1}. {line}" for i, line in enumerate(brnzel_lines))
         await interaction.response.send_message(msg)
 
-
 # -------------------
-# Helper: Send full panel
+# Helper: Send Full Panel Only
 # -------------------
 async def send_panel(ctx):
     view = PanelView()
-    msg = "**Updated Panel:**\n"
+    msg = "**Panel:**\n"
     if mina_lines:
         msg += "\n**Mina:**\n" + "\n".join(f"{i+1}. {line}" for i, line in enumerate(mina_lines))
     if sora_lines:
@@ -108,20 +135,18 @@ async def send_panel(ctx):
         msg += "\n**Brnzel:**\n" + "\n".join(f"{i+1}. {line}" for i, line in enumerate(brnzel_lines))
     await ctx.send(msg, view=view)
 
-
+# -------------------
+# Events & Commands
+# -------------------
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user}")
-
 
 @bot.command()
 async def panel(ctx):
     await ctx.send("Choose a panel:", view=PanelView())
 
-
-# -------------------
-# Add commands
-# -------------------
+# Add Commands
 @bot.command()
 @is_bot_staff()
 async def addm(ctx, *, text):
@@ -129,7 +154,6 @@ async def addm(ctx, *, text):
         if line.strip():
             mina_lines.append(line.strip())
     await send_panel(ctx)
-
 
 @bot.command()
 @is_bot_staff()
@@ -139,7 +163,6 @@ async def adds(ctx, *, text):
             sora_lines.append(line.strip())
     await send_panel(ctx)
 
-
 @bot.command()
 @is_bot_staff()
 async def addk(ctx, *, text):
@@ -147,7 +170,6 @@ async def addk(ctx, *, text):
         if line.strip():
             kay_lines.append(line.strip())
     await send_panel(ctx)
-
 
 @bot.command()
 @is_bot_staff()
@@ -157,64 +179,43 @@ async def addb(ctx, *, text):
             brnzel_lines.append(line.strip())
     await send_panel(ctx)
 
-
-# -------------------
-# Delete commands
-# -------------------
+# Delete Commands
 @bot.command()
 @is_bot_staff()
 async def delm(ctx, number: int):
     if 1 <= number <= len(mina_lines):
-        removed = mina_lines.pop(number - 1)
-        await ctx.send(f"Removed from Mina: {removed}")
-    else:
-        await ctx.send("Invalid number.")
+        mina_lines.pop(number - 1)
     await send_panel(ctx)
-
 
 @bot.command()
 @is_bot_staff()
 async def dels(ctx, number: int):
     if 1 <= number <= len(sora_lines):
-        removed = sora_lines.pop(number - 1)
-        await ctx.send(f"Removed from Sora: {removed}")
-    else:
-        await ctx.send("Invalid number.")
+        sora_lines.pop(number - 1)
     await send_panel(ctx)
-
 
 @bot.command()
 @is_bot_staff()
 async def delk(ctx, number: int):
     if 1 <= number <= len(kay_lines):
-        removed = kay_lines.pop(number - 1)
-        await ctx.send(f"Removed from Kay: {removed}")
-    else:
-        await ctx.send("Invalid number.")
+        kay_lines.pop(number - 1)
     await send_panel(ctx)
-
 
 @bot.command()
 @is_bot_staff()
 async def delb(ctx, number: int):
     if 1 <= number <= len(brnzel_lines):
-        removed = brnzel_lines.pop(number - 1)
-        await ctx.send(f"Removed from Brnzel: {removed}")
-    else:
-        await ctx.send("Invalid number.")
+        brnzel_lines.pop(number - 1)
     await send_panel(ctx)
 
-
-# -------------------
-# Commands list
-# -------------------
+# Commands List
 @bot.command()
 async def cmnds(ctx):
     msg = """
 **Bot Commands**
 
 !panel → show buttons panel
-!cmnds → show this command list
+!cmnds → show all commands
 
 Add items:
 !addm text → add to Mina
@@ -230,5 +231,7 @@ Delete items:
 """
     await ctx.send(msg)
 
-
+# -------------------
+# Run Bot
+# -------------------
 bot.run(os.getenv("TOKEN"))
