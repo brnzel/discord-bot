@@ -6,8 +6,13 @@ import sqlite3
 from flask import Flask
 from threading import Thread
 
+# ---------------- CONFIG ----------------
 ALLOWED_ROLE = 1430823219736088658
-ALLOWED_CHANNELS = [1479831346456170618, 1478383164958314516, 1468947884807426152]
+ALLOWED_CHANNELS = [
+    1479831346456170618,
+    1478383164958314516,
+    1468947884807426152
+]
 PANEL_INTERVAL = 30
 DATABASE = "panels.db"
 
@@ -20,7 +25,7 @@ panel_channel = None
 panel_message = None
 last_items_message = {}
 
-# -------------- DATABASE ----------------
+# ---------------- DATABASE ----------------
 def init_db():
     with sqlite3.connect(DATABASE, check_same_thread=False) as conn:
         c = conn.cursor()
@@ -41,8 +46,7 @@ def add_panel_line(key, line):
     lines.append(line)
     with sqlite3.connect(DATABASE, check_same_thread=False) as conn:
         c = conn.cursor()
-        c.execute("UPDATE panels SET content=? WHERE key=?",
-                  ("\n".join(lines), key))
+        c.execute("UPDATE panels SET content=? WHERE key=?", ("\n".join(lines), key))
         conn.commit()
 
 def del_panel_line(key, index):
@@ -51,8 +55,7 @@ def del_panel_line(key, index):
         removed = lines.pop(index)
         with sqlite3.connect(DATABASE, check_same_thread=False) as conn:
             c = conn.cursor()
-            c.execute("UPDATE panels SET content=? WHERE key=?",
-                      ("\n".join(lines), key))
+            c.execute("UPDATE panels SET content=? WHERE key=?", ("\n".join(lines), key))
             conn.commit()
         return removed
     return None
@@ -68,10 +71,10 @@ def is_bot_staff():
 class PanelView(View):
     def __init__(self):
         super().__init__(timeout=None)
-        self.add_item(Button(label="Mina", style=discord.ButtonStyle.primary, custom_id="mina_btn"))
-        self.add_item(Button(label="Sora", style=discord.ButtonStyle.success, custom_id="sora_btn"))
-        self.add_item(Button(label="Kay", style=discord.ButtonStyle.secondary, custom_id="kay_btn"))
-        self.add_item(Button(label="Brnzel", style=discord.ButtonStyle.danger, custom_id="brnzel_btn"))
+        self.add_item(Button(label="Mina", style=discord.ButtonStyle.primary))
+        self.add_item(Button(label="Sora", style=discord.ButtonStyle.success))
+        self.add_item(Button(label="Kay", style=discord.ButtonStyle.secondary))
+        self.add_item(Button(label="Brnzel", style=discord.ButtonStyle.danger))
 
     async def interaction_check(self, interaction):
         role = discord.utils.get(interaction.user.roles, id=ALLOWED_ROLE)
@@ -83,10 +86,11 @@ class PanelView(View):
     async def show_panel(self, interaction, key, title):
         lines = get_panel(key)
         if not lines:
-            msg = await interaction.response.send_message(f"{title} is empty.", ephemeral=False)
+            await interaction.response.send_message(f"{title} is empty.", ephemeral=False)
         else:
             content = f"**{title}:**\n" + "\n".join(f"{i+1}. {l}" for i,l in enumerate(lines))
-            msg = await interaction.response.send_message(content, ephemeral=False)
+            await interaction.response.send_message(content, ephemeral=False)
+        # store last panel items message
         last_items_message[interaction.channel.id] = await interaction.original_response()
 
     @discord.ui.button(label="Mina", style=discord.ButtonStyle.primary)
@@ -118,10 +122,15 @@ async def panel_loop():
 
 # --------------- KEEP ALIVE ----------------
 app = Flask("")
+
 @app.route("/")
 def home(): return "Bot is alive"
-def run(): app.run(host="0.0.0.0", port=8080)
-def keep_alive(): Thread(target=run).start()
+
+def run_flask():
+    app.run(host="0.0.0.0", port=8080)
+
+def keep_alive():
+    Thread(target=run_flask).start()
 
 # --------------- EVENTS ----------------
 @bot.event
@@ -152,6 +161,7 @@ async def panelstop(ctx):
     panel_message = None
     await ctx.send("🛑 Panel loop stopped.")
 
+# ------- ADD / DELETE PANEL ITEMS -------
 @bot.command()
 @is_bot_staff()
 async def addm(ctx, *, text):
@@ -198,18 +208,22 @@ async def delb(ctx, number:int):
     r = del_panel_line("brnzel", number-1)
     await ctx.send(f"Removed from Brnzel: {r}" if r else "Invalid number.")
 
+# -------- DELETE LAST ITEMS MESSAGE ONLY --------
 @bot.command()
 @is_bot_staff()
 async def pdel(ctx):
-    if ctx.channel.id not in ALLOWED_CHANNELS: return await ctx.send("❌ Cannot delete panel items here.")
+    if ctx.channel.id not in ALLOWED_CHANNELS:
+        return await ctx.send("❌ Cannot delete panel items here.")
     msg = last_items_message.get(ctx.channel.id)
     if msg:
-        try: await msg.delete(); last_items_message[ctx.channel.id]=None; await ctx.send("✅ Deleted last items message.")
-        except: await ctx.send("❌ Failed to delete.")
-    else: await ctx.send("❌ No items message to delete.")
-
-keep_alive()
-bot.run(os.getenv("TOKEN"))
+        try:
+            await msg.delete()
+            last_items_message[ctx.channel.id] = None
+            await ctx.send("✅ Deleted last items message.")
+        except:
+            await ctx.send("❌ Failed to delete.")
+    else:
+        await ctx.send("❌ No items message to delete.")
 
 # ---------------- RUN BOT ----------------
 keep_alive()
